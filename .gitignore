@@ -1,0 +1,15 @@
+# Runtime data — must never be committed
+.cc_tmp/
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Backups created by sed -i
+*.bak
