@@ -1,0 +1,20 @@
+# Codex review CLI 输出格式 recipe (示例)
+# 首次跑 /auto-fix-crashes 时 Skill 用试探 prompt 跑一次,把实际格式写到 .cc_tmp/crash/codex-output-recipe.yaml
+
+# 评级表行的正则 (Skill 用 grep -E 解析)
+# 匹配示例: "[A] ✅ diff 修了栈顶..."
+verdict_line_regex: '^\[([A-I])\] (✅|⚠️|❌) (.+)$'
+
+# 强制问题清单标记 (codex 输出里 BLOCK 区段的 leading 符号)
+block_section_marker: "✋"
+
+# 建议区段标记
+advice_section_marker: "💭"
+
+# 试探 prompt — Skill 首次跑用,验证 codex 能按契约输出
+probe_prompt_path: "instructions/review-prompt.md"
+
+# 试探时用的最小 diff 策略
+# (Skill 自动生成: 改一个无关注释,跑 codex review --uncommitted 验证 9 行格式)
+probe_diff_strategy: "comment_edit"
+probe_expected_verdict_lines: 9   # [A] 到 [I] 共 9 行

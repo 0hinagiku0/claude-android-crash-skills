@@ -1,0 +1,78 @@
+# 友盟 U-APM 崩溃列表抓取 recipe (示例)
+# 首次跑 /auto-fix-crashes 时由 Skill 自动录制 .cc_tmp/crash/umeng-recipe.yaml,本文件仅 reference
+#
+# 实测固化 (2026-05-15):
+# - 友盟 SPA 不响应 URL query 筛选,**必须 POST 显式 body**
+# - API endpoint 固定: POST /hsf/analysis/errorList
+# - 响应: {code:200, msg:null, data:{total:N, page:1, list:[...]}}
+# - 主路径用 chrome-devtools `evaluate_script` 在页内主动 fetch (复用浏览器 cookies)
+
+# 友盟后台 URL 匹配模式 (识别页面是否在正确项目)
+# appkey 在 path 段: /platform/<24位 hex>/error_analysis/crash
+page_url_pattern: "apm\\.umeng\\.com/platform/\\${appkey}/error_analysis/crash"
+
+# 项目标识
+project_name: "车来了-android"
+project_appkey: "${appkey}"   # 录制后会是实际 24 位 hex (例: "53870cb556240be6e4017771")
+
+# 崩溃列表 API
+api:
+  endpoint: "/hsf/analysis/errorList"
+  method: "POST"
+  content_type: "application/json"
+  # POST body 模板 (Skill 运行时替换 ${appkey} ${version} ${startDay} ${endDay})
+  # 注意: friendly 默认 dateType=today,所以**必须显式传 startDay/endDay**,否则 400
+  body_template:
+    dataSourceId: "${appkey}"
+    appType: "app"
+    type: "app"
+    errorAbstract: ""
+    version: ["${version}"]      # 例: ["7.3.2"];空数组 = 全部版本
+    crashType: "JAVA"             # JAVA / Native / ANR
+    pageSize: 100
+    page: 1
+    status: ""                    # 空 = 全部状态;"0"=未处理 / "1"=已修复 / "2"=处理中 / "3"=已忽略
+    order: "desc"
+    orderBy: "happenTimes"        # happenTimes / affectUsers / lastHappenTime
+    startDay: "${startDay}"       # "YYYYMMDD HHMMSS",例 "20260509 000000"
+    endDay: "${endDay}"           # 例 "20260515 235959"
+    dateType: "last7days"
+    errorType: "crash"
+    summaryMd5: ""
+    onlyNew: false
+    onlyOom: false
+    hasLogcat: false
+    noSystemError: false
+    onlyHarmonyOS: false
+    hasNativePage: false
+    nativePages: []
+    sdkTypes: []
+    thirdSdks: []
+    appStatus: []
+    customTags: []
+
+# JSON 响应 → v1 CSV 11 列映射 (jq 语法相对 data.list 数组的每一项)
+# 严格对齐 ~/.claude/skills/crash-analyzer/parsing.md §1
+# Skill 运行时遍历 data.list,按下方映射合成每行 CSV
+field_map:
+  错误摘要: ".summary"                       # 完整栈文本 (第一行=异常类+message,第二行起=单帧栈),v1 §3/§4 决策依赖此列
+  错误ID: ".id"                              # 13 位长整型
+  错误类型: ".crashType | {JAVA:\"JAVA崩溃\",Native:\"Native崩溃\",ANR:\"ANR\"}[.]"
+  最近一次发生时间: ".lastHappenTime"
+  版本范围: ".appVersion"                    # 例: "4.72.10 - 7.3.4" 或 "7.3.2"
+  错误次数: ".happenTimes"
+  影响用户数: ".affectUsers"
+  状态: ".status | {0:\"未处理\",1:\"已修复\",2:\"处理中\",3:\"已忽略\"}[.]"
+  处理人: ".processors | map(.name) | join(\",\")"
+  标签: ".tags | join(\",\")"
+  链接: "\"https://apm.umeng.com/platform/${appkey}/crash/detail/\" + .id"   # 含真长整型 ID
+
+# 分页策略
+pagination:
+  page_size: 100
+  # 若 list_len == page_size 则继续翻 page+1,直到 list_len < page_size
+
+# DOM scrape fallback selector (P2.fallback.1 用,API 完全不通时才会走)
+dom:
+  row_selector: null     # 例: ".crash-list-row" — 首次 API 失败时录,在 §5.2 fallback 流程里 AskUserQuestion 问用户
+  summary_selector: null
